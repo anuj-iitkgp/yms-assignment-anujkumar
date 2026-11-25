@@ -12,6 +12,27 @@ moved = max(high - pclose, pclose - low) / pclose > 2%
 `high`/`low` are that day's high and low and `pclose` is the previous close. In other words, the stock
 leaves the band `(pclose × 0.98, pclose × 1.02)` at least once.
 
+**Example.** ADANIENT on 2026-03-04 had `pclose = 2124.6`, so its band was 2082.1 to 2167.1. That day its
+low was about 2037.5, which is 4.10% below `pclose` (`down_move_pct = 4.0996`), while its high stayed below
+`pclose` (`up_move_pct = -0.9414`). The largest move was 4.10% > 2%, so `moved = True`.
+
+**Size.** 50 stocks × 138 trading days = 6,900 (date, stock) rows: 97 training days (4,850 rows, 41.2%
+moved) and 41 test days (2,050 rows, 34.4% moved), all between 2026-03-04 and 2026-10-30.
+
+## Quick start
+
+```
+git clone https://github.com/shantanusinghyms/YMS-Financial-Assignment.git
+cd YMS-Financial-Assignment
+mkdir my_submission
+python prepare_user_historical_info.py --out my_submission/user_historical_info.csv
+cp predict.py my_submission/
+python evaluator/run_evaluation.py my_submission       # scores the template on the training dates
+```
+
+This runs the example model end to end and prints its precision, recall and score. Replace
+`predict.py` (and, if you want extra data, `prepare_user_historical_info.py`) with your own, and run it again.
+
 ## What you get
 
 | Path | Contents |
@@ -41,6 +62,17 @@ leaves the band `(pclose × 0.98, pclose × 1.02)` at least once.
 | `vix` | The stock's option-implied volatility (annualised %), averaged over `vix_asof`'s session. See below |
 | `vix_1m`, `vix_3m`, `vix_6m`, `vix_1y` | Averages of the daily `vix` over the last 30 / 90 / 180 / 365 calendar days up to `vix_asof` |
 | `vix_zscore_smooth`, `vix_zscore_raw` | How high the stock's `vix` is compared with the typical volatility of all ~224 F&O stocks. See below |
+
+**One row of `data/historical_info/20260304_n50.info.csv`** (rounded):
+
+```
+date      name      pclose  phi     plo     pvolume       mddv_20       vix_asof  vix   vix_1m ... vix_zscore_smooth
+20260304  ADANIENT  2124.6  2147.9  2073.7  4,487,653,648 3,113,771,485 20260302  37.2  37.2   ... 0.91
+```
+
+Before the open on 2026-03-04 you know that ADANIENT closed at 2124.6 the day before, traded between
+2073.7 and 2147.9 that day, and its options priced about 37.2% annual volatility, roughly
+`37.2 / 15.9 ≈ 2.3%` a day, so a 2% move is less than one normal day's swing for this stock.
 
 ### Understanding the volatility columns
 
@@ -91,6 +123,15 @@ the day before was a test day, and those values would give its answer away. Thei
 
    It must write `<out-dir>/<YYYYMMDD>.predictions.csv` with columns `name,prediction`, one row per stock in
    that day's info file, `prediction` = `True` if you expect a move of more than 2%, otherwise `False`.
+   For example, `predictions/20260304.predictions.csv`:
+
+   ```
+   name,prediction
+   ADANIENT,True
+   ADANIPORTS,False
+   APOLLOHOSP,False
+   ...                   (50 rows, one per stock)
+   ```
 2. **`prepare_user_historical_info.py`** and the **`user_historical_info.csv`** it produces: any extra data
    you want (market data APIs, index levels, global markets, …). Columns `date,name,<your features>`.
    Cover **every date in `data/all_dates.txt`**.
@@ -127,6 +168,15 @@ Candidates who pass are ranked by `score` (0 to 1, higher is better).
   near-certain moves gets high precision but almost no recall, so it scores low (about 0.3–0.5).
   Flagging everything fails the precision bar.
 - A missing prediction file or row counts as wrong: a missed move, or a false alarm.
+
+**Worked example.** On the 2,050 test rows, 706 stocks actually move. Suppose you flag 320 rows and
+210 of them move:
+
+```
+precision = 210 / 320                                = 0.656   (passes the 0.60 bar)
+recall    = 210 / 706                                = 0.297
+score     = sqrt( 1 / (0.75 / 0.656 + 0.25 / 0.297) ) = 0.710
+```
 
 **The test dates are calmer than the training dates.** About 34% of test rows move, against 41% of
 training rows, so precision usually drops on the test dates. The template `predict.py` reaches 62.7%
@@ -171,3 +221,26 @@ precision, recall, score and PASS/FAIL. The second command is exactly how your s
   tune on the training dates only, and say how in `NOTES.md`.
 - Explain your approach in a short `NOTES.md`: features, model, and how you tuned it without using the
   test dates.
+
+## FAQ
+
+**Can I use data that is not in the info files?** Yes. Put it in `user_historical_info.csv` (built by
+your `prepare_user_historical_info.py`): index levels, global markets, earnings dates, anything. It must
+cover every date in `data/all_dates.txt`, and a row dated D may only use information public before
+09:15 on D.
+
+**Which libraries can I use?** Any. List them in `requirements.txt`. The provided scripts need only the
+Python standard library.
+
+**How long may `predict.py` take?** The grader allows 300 seconds per date. A date that crashes or times
+out writes no predictions, so all 50 rows of that date count as wrong.
+
+**Some values are blank. Is that a bug?** No. `phi`/`plo` are blank when the previous day's data is
+incomplete, and some training files are partly blanked (see above). Your code must handle blanks.
+
+**Is accuracy part of the score?** No. It is printed for information only. Only precision (the pass bar)
+and the score count.
+
+**What should `NOTES.md` cover?** Your features, your model, how you chose its threshold on the training
+dates (for example a walk-forward or a time-based split), and what you tried that did not work.
+
