@@ -222,6 +222,31 @@ precision, recall, score and PASS/FAIL. The second command is exactly how your s
 - Explain your approach in a short `NOTES.md`: features, model, and how you tuned it without using the
   test dates.
 
+## How to submit
+
+Keep your work private. **Do not fork this repository**: a fork of a public repository is public, so
+other candidates could see your solution. Do not open a pull request either.
+
+1. **Make your own private copy.** Click **Use this template → Create a new repository**, name it, for
+   example, `yms-assignment-<your-name>`, select **Private**, and click **Create repository**.
+   Without the button, create an empty **private** repository on GitHub and run:
+
+   ```
+   git clone https://github.com/shantanusinghyms/YMS-Financial-Assignment.git yms-assignment
+   cd yms-assignment
+   git remote set-url origin https://github.com/<your-username>/<your-private-repo>.git
+   git push -u origin main
+   ```
+
+2. **Put your work at the top level of that repository:** `predict.py`, `prepare_user_historical_info.py`,
+   `user_historical_info.csv`, `NOTES.md`, `requirements.txt`, and any helper modules or small model files.
+3. **Check that it runs.** From the top of your repository, `python evaluator/run_evaluation.py .` grades
+   it on the training dates, and adding `--data evaluator/data` grades it on the test dates.
+4. **Give us access.** In your repository, go to **Settings → Collaborators → Add people** and invite
+   both reviewers, one at a time: **`shantanusinghyms`** and **`Koteswar1008`**.
+5. **Send us the link** to your repository. We grade the last commit on `main` with our own copy of
+   `evaluator/` and `test_predictions.py`, so changes to those files in your repository have no effect.
+
 ## FAQ
 
 **Can I use data that is not in the info files?** Yes. Put it in `user_historical_info.csv` (built by
