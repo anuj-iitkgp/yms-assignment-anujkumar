@@ -65,7 +65,7 @@ until 2026-09-01. Comparing `vix` with
 vix_zscore_smooth = (vix - M) / S
 ```
 
-- `M` is the typical volatility level: the average, over ~224 F&O stocks, of each stock's own
+- `M` is the typical volatility level: the average, over ~All stocks (224 stocks) which have Futures and Options, of each stock's own
   3-month average `vix` (for example M ≈ 28).
 - `S` is the typical spread: it combines how much each stock's `vix` varies over 3 months with how
   much the stocks differ from each other (for example S ≈ 7).
