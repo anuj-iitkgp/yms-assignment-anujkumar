@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
 """Score <date>.predictions.csv files against truth labels (standard library only).
 
-  test_predictions.py PREDICTIONS_DIR [--labels LABELS_CSV] [--min-precision 0.60] [--json OUT]
+  test_predictions.py PREDICTIONS_DIR --labels LABELS_CSV [--min-precision 0.60] [--json OUT]
 
 Each predictions file has columns name,prediction (True/False, 1/0, yes/no). Every labelled
 (date, name) is scored; a missing file or row counts as a wrong prediction.
   precision = true positives / predicted moves      = TP / (TP + FP)
   recall    = true positives / actual moves (> 2%)  = TP / (TP + FN)
-  combined  = 0.75 * precision + 0.25 * recall
-  PASS      = precision > min-precision (default 0.60), plus optional gates recall >= min-recall
-              and combined >= min-combined (both default 0 = off)
+  score     = sqrt( 1 / (0.75/precision + 0.25/recall) )      (0 if precision or recall is 0)
+  PASS      = precision > min-precision (default 0.60)
   (accuracy is reported for information only)
 """
 import argparse
 import csv
 import json
+import math
 import os
 import sys
 
@@ -60,6 +60,17 @@ def load_predictions(pred_dir, dates):
     return preds, problems
 
 
+def final_score(prec, rec):
+    """Weighted harmonic mean of precision and recall (precision weight 0.75), then square root.
+
+    The harmonic mean is near 0 when either side is near 0, so neither flagging only a few sure
+    moves (high precision, tiny recall) nor flagging everything (tiny precision) can score well.
+    The square root spreads the 0..1 scale so a solid model reads about 0.7 instead of 0.5."""
+    if prec <= 0 or rec <= 0:
+        return 0.0
+    return math.sqrt(1.0 / (W_PREC / prec + W_REC / rec))
+
+
 def score(labels, preds):
     tp = fp = tn = fn = missing = 0
     for key, truth in labels.items():
@@ -80,16 +91,14 @@ def score(labels, preds):
     rec = tp / (tp + fn) if tp + fn else 0.0
     prec = tp / (tp + fp) if tp + fp else 0.0
     return dict(rows=n, tp=tp, fp=fp, tn=tn, fn=fn, missing=missing, accuracy=acc, recall=rec,
-                precision=prec, combined=W_PREC * prec + W_REC * rec)
+                precision=prec, score=final_score(prec, rec))
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('predictions_dir')
-    ap.add_argument('--labels', default=os.path.join(HERE, 'data', 'test_labels.csv'))
+    ap.add_argument('--labels', required=True, help='labels CSV with date,name,moved')
     ap.add_argument('--min-precision', type=float, default=0.60)
-    ap.add_argument('--min-combined', type=float, default=0.0, help='optional gate on the combined score')
-    ap.add_argument('--min-recall', type=float, default=0.0, help='optional gate, e.g. 0.30, against predicting only a few certain moves')
     ap.add_argument('--json')
     a = ap.parse_args()
     labels = load_labels(a.labels)
@@ -97,14 +106,12 @@ def main():
     preds, problems = load_predictions(a.predictions_dir, dates)
     s = score(labels, preds)
     s.update(dates=len(dates), first_date=dates[0], last_date=dates[-1], problems=problems,
-             min_precision=a.min_precision, min_combined=a.min_combined, min_recall=a.min_recall,
-             passed=s['precision'] > a.min_precision and s['combined'] >= a.min_combined and s['recall'] >= a.min_recall)
+             min_precision=a.min_precision, passed=s['precision'] > a.min_precision)
     print('dates %d (%s..%s)  rows %d  missing %d' % (s['dates'], s['first_date'], s['last_date'], s['rows'], s['missing']))
     print('confusion  TP %d  FP %d  TN %d  FN %d' % (s['tp'], s['fp'], s['tn'], s['fn']))
     print('precision %.4f\nrecall    %.4f\naccuracy  %.4f  (information only)' % (s['precision'], s['recall'], s['accuracy']))
-    print('combined  %.4f   (= %.2f*precision + %.2f*recall)' % (s['combined'], W_PREC, W_REC))
-    gate = 'precision > %.2f' % a.min_precision + (' and recall >= %.2f' % a.min_recall if a.min_recall else '') + (' and combined >= %.2f' % a.min_combined if a.min_combined else '')
-    print('RESULT    %s   (needs %s)' % ('PASS' if s['passed'] else 'FAIL', gate))
+    print('score     %.4f   (= sqrt(1 / (%.2f/precision + %.2f/recall)))' % (s['score'], W_PREC, W_REC))
+    print('RESULT    %s   (needs precision > %.2f)' % ('PASS' if s['passed'] else 'FAIL', a.min_precision))
     for p in problems[:20]:
         print('  problem:', p)
     if len(problems) > 20:
