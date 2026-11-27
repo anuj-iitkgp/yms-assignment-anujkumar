@@ -26,7 +26,7 @@ Because the test period is substantially calmer than the training set (34.4% pos
   - Mar 2026: **67.1%**, Apr 2026: **58.0%**, May 2026: **46.8%**
   - Jun 2026: **31.6%**, Jul 2026: **29.1%**, Aug 2026: **18.3%**
   - Sep 2026: **31.5%**, Oct 2026: **46.0%**
-- **Cross-stock heterogeneity**: `SHRIRAMFIN` (69.1%), `ETERNAL` (64.9%), and `INDIGO` (58.8%) move >2% more than 3× as often as `ITC` (17.5%), `SUNPHARMA` (20.6%), and `CIPLA` (23.7%). Crucially, stocks also differ systematically in their realized intraday excursion relative to option-implied daily SD ($\text{max\_move\_pct} / (\text{vix}/\sqrt{252})$ ranges from ~1.03 for `WIPRO` to ~1.49 for `TITAN` and ~1.44 for `SHRIRAMFIN` / `BAJFINANCE`).
+- **Cross-stock heterogeneity**: `SHRIRAMFIN` (69.1%), `ETERNAL` (64.9%), and `INDIGO` (58.8%) move >2% more than 3× as often as `ITC` (17.5%), `SUNPHARMA` (20.6%), and `CIPLA` (23.7%). Crucially, stocks also differ systematically in their realized intraday excursion relative to option-implied daily SD (`max_move_pct / (vix / sqrt(252))` ranges from ~1.03 for `WIPRO` to ~1.49 for `TITAN` and ~1.44 for `SHRIRAMFIN` / `BAJFINANCE`).
 - **Univariate correlations with `moved` (unmasked rows)**:
   - `daily_vol` (`vix / (100 * sqrt(252))`): `0.350`
   - `vix_zscore_raw` / `vix_zscore_smooth`: `0.327`
@@ -41,18 +41,18 @@ Because the test period is substantially calmer than the training set (34.4% pos
 Every feature is constructed strictly from information public before **09:15 IST on day $D$**:
 
 ### A. Provided Info & Cross-Sectional Features (Day $D$ pre-open)
-1. `log_daily_vol`: $\log(\max(\text{vix} / (100\sqrt{252}), 10^{-5}))$ — log-scale option-implied daily SD, matching the log scale of `max_move_pct`.
+1. `log_daily_vol`: `log(max(vix / (100 * sqrt(252)), 1e-5))` — log-scale option-implied daily SD, matching the log scale of `max_move_pct`.
 2. `vix_zscore_smooth`: Stock's implied volatility relative to the ~224-stock F&O universe.
-3. `vix_vs_1m`, `vix_vs_3m`: Short- and medium-term VIX term-structure / spike ratios ($\text{vix}/\text{vix\_1m}$, $\text{vix}/\text{vix\_3m}$).
+3. `vix_vs_1m`, `vix_vs_3m`: Short- and medium-term VIX term-structure / spike ratios (`vix / vix_1m`, `vix / vix_3m`).
 4. `vix_rel_mkt`: Stock's `vix` divided by the same-day pre-open cross-sectional mean `vix` across the 50 Nifty-50 stocks.
-5. `log_prev_range`: $\log(\max(\text{prev\_range\_filled}, 10^{-5}))$, where missing `prev_range` (`phi`/`plo` blank) is first imputed with the stock's causal 14-day realized range `hist_range_14d` before falling back to the training median.
-6. `log_vol_ratio`: $\log(\max(\text{pvolume} / \text{mddv\_20}, 10^{-6}))$ — volume surge relative to 20-day median traded value.
+5. `log_prev_range`: `log(max(prev_range_filled, 1e-5))`, where missing `prev_range` (`phi`/`plo` blank) is first imputed with the stock's causal 14-day realized range `hist_range_14d` before falling back to the training median.
+6. `log_vol_ratio`: `log(max(pvolume / mddv_20, 1e-6))` — volume surge relative to 20-day median traded value.
 
 ### B. Strictly Causal Historical Stock Features (Dates $< D$ only)
 Computed dynamically inside `predict.py` using only `<date>_n50.info.csv` files with `file_date < D`:
 7. `hist_range_14d`: Mean of `(phi - plo) / pclose` over available unmasked days within the past 14 calendar days ($< D$; falls back to expanding mean $< D$ if empty).
 8. `shrunk_ratio`: Bayesian-shrunk stock-specific intraday range to implied-vol multiplier:
-   $$\text{shrunk\_ratio}_{i,D} = \frac{\sum_{t < D} \frac{\text{prev\_range}_{i,t}}{\text{daily\_vol}_{i,t}} + 8 \times 1.28}{N_{i,<D} + 8}$$
+   $$\text{shrunkRatio}_{i,D} = \frac{\sum_{t < D} \frac{\text{prevRange}_{i,t}}{\text{dailyVol}_{i,t}} + 8 \times 1.28}{N_{i,<D} + 8}$$
 
 ### C. Pre-Market External Features (`prepare_user_historical_info.py` → `user_historical_info.csv`)
 Fetched once from Yahoo Finance daily bars and aligned strictly using **`date_ist < D`** (Indian market closes at 15:30 IST on a trading day strictly before $D$, ~17.75 hours prior to day $D$'s 09:15 IST open):
@@ -88,9 +88,9 @@ On the curated 11-feature set (`F_R11`), all preprocessing (`SimpleImputer(media
 | **`ens_lin_dv` (Final Ensemble)** | **0.7031** / **0.4986** | 0.7299 / 0.6671 | 0.7377 / 0.6738 |
 
 ### Final Model Architecture (`ens_lin_dv`)
-Continuous `log(max_move_pct)` predictions from `HuberRegressor` and `Ridge` are mapped to probability space via $\Phi\left(\frac{\hat{y} - \log(2.0)}{0.48}\right)$ and combined with `LogisticRegression` and a direct `daily_vol` Gaussian anchor $\Phi\left(\frac{\text{daily\_vol} - 0.017}{0.004}\right)$:
+Continuous `log(max_move_pct)` predictions from `HuberRegressor` and `Ridge` are mapped to probability space via $\Phi\left(\frac{\hat{y} - \log(2.0)}{0.48}\right)$ and combined with `LogisticRegression` and a direct `daily_vol` Gaussian anchor $\Phi\left(\frac{\text{dailyVol} - 0.017}{0.004}\right)$:
 
-$$p = 0.45\,p_{\text{Huber}} + 0.20\,p_{\text{Ridge}} + 0.20\,p_{\text{LogReg}} + 0.15\,p_{\text{daily\_vol}}$$
+$$p = 0.45\,p_{\text{Huber}} + 0.20\,p_{\text{Ridge}} + 0.20\,p_{\text{LogReg}} + 0.15\,p_{\text{dailyVol}}$$
 
 Blending the `daily_vol` anchor raised `wf_28` OOS AUC from `0.6903` to `0.7031` (and AP from `0.4853` to `0.4986`) by stabilizing forward regime extrapolation. All learned parameters are exported to `model_params.json`, so `predict.py` executes with zero external library dependencies at inference time (~20 ms per date).
 
