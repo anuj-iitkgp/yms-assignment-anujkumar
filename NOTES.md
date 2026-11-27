@@ -34,6 +34,10 @@ Because the test period is substantially calmer than the training set (34.4% pos
   - `prev_range` (`(phi - plo) / pclose`): `0.241`
   - `log_pvolume`: `0.121`, `vol_ratio` (`pvolume / mddv_20`): `0.055`
 
+![Monthly Volatility Regimes and Stock Heterogeneity](assets/eda_regimes_and_stocks.png)
+
+![Implied Volatility Deciles and Stock Multiplier](assets/eda_iv_and_deciles.png)
+
 ---
 
 ## 3. Feature Engineering & No-Look-Ahead Guarantees
@@ -94,6 +98,8 @@ $$p = 0.45\,p_{\text{Huber}} + 0.20\,p_{\text{Ridge}} + 0.20\,p_{\text{LogReg}} 
 
 Blending the `daily_vol` anchor raised `wf_28` OOS AUC from `0.6903` to `0.7031` (and AP from `0.4853` to `0.4986`) by stabilizing forward regime extrapolation. All learned parameters are exported to `model_params.json`, so `predict.py` executes with zero external library dependencies at inference time (~20 ms per date).
 
+![Model Comparison and Feature Weights](assets/model_comparison_and_weights.png)
+
 ---
 
 ## 6. Threshold Selection & Validation Results
@@ -109,6 +115,8 @@ Threshold sweep on `ens_lin_dv` across `blocked5` (42.9% base rate), `interleave
 | 0.650 | 0.734 / 0.308 / 0.7382 (612) | 0.731 / 0.304 / 0.7357 | 0.595 / 0.071 (74) | 0.676 | 0.609 | 92.5% | 0.6828 |
 
 We selected **`threshold = 0.640`**, where even the 10th percentile of calm-regime bootstrap draws hits `0.600` precision (~90% pass probability) while retaining strong recall (`0.318` on `blocked5`, `Score = 0.7407`).
+
+![Threshold Optimization and Calm-Regime Bootstrap](assets/threshold_and_calm_bootstrap.png)
 
 ---
 
